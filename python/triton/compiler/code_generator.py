@@ -82,6 +82,8 @@ def _apply_to_tuple_values(value, fn):
 
     vals = [fn(v) for v in value]
     vals = [constexpr(v) if v is None else v for v in vals]
+    vals = [constexpr(v) if isinstance(v, (JITFunction, int, bool)) else v for v in vals]
+    vals = [language.tuple(v) if isinstance(v, tuple) else v for v in vals]
     types = [v.type for v in vals]
     return language.tuple(vals, language.tuple_type(types, fields))
 
@@ -568,10 +570,15 @@ class CodeGenerator(ast.NodeVisitor):
 
     def visit_Assign(self, node):
         # construct values to assign
+        def _sanitize_non_constexpr_value(value):
+            if isinstance(value, constexpr):
+                return value
+            return _sanitize_value(value)
+
         def _sanitize_value(value):
             if isinstance(value, language.tuple):
-                return _apply_to_tuple_values(value, _sanitize_value)
-            native_nontensor_types = (language.dtype, language.tuple)
+                return _apply_to_tuple_values(value, _sanitize_non_constexpr_value)
+            native_nontensor_types = (language.dtype, language.tuple, JITFunction)
             value = _unwrap_if_constexpr(value)
             if value is not None and \
                 not _is_triton_value(value) and \
