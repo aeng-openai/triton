@@ -298,7 +298,13 @@ def _p_matmul_ogs(
                 else:
                     x = tl.load(XPtrs, mask=mask_k[None, :], other=0.0)
 
-            w = _tma_load_2d(W, [expt_id, off_k_w, off_n], transpose=W_TRANSPOSE)
+            if W_PACK_DIVISOR == 2 and PACKED_BLOCK_K_W < 128:
+                w = W.load([expt_id, off_n // 2, off_k_w // 64, 0])
+                w = tl.reshape(w, (BLOCK_N // 2, PACKED_BLOCK_K_W // 64, 2, 64))
+                w = tl.permute(w, (1, 3, 0, 2))
+                w = tl.reshape(w, (PACKED_BLOCK_K_W, BLOCK_N))
+            else:
+                w = _tma_load_2d(W, [expt_id, off_k_w, off_n], transpose=W_TRANSPOSE)
 
             if is_microscaled_format:
                 x_format: tl.constexpr = get_scaled_dot_format_string(x.dtype)
