@@ -127,12 +127,12 @@ class TensorDescriptorBuilder:
             s0, s1, s2 = w_tensor.shape
             w_tensor = w_tensor.reshape(s0, triton.cdiv(s1, 2), 2, triton.cdiv(s2, 64), 64)
             w_tensor = w_tensor.permute(0, 1, 3, 2, 4)
-            w_tensor = w_tensor.reshape(s0, triton.cdiv(s1, 2), triton.cdiv(s2, 64), 128)
+            w_tensor = w_tensor.reshape(s0, triton.cdiv(s1, 2), triton.cdiv(s2, 64), 2, 64)
             return TensorDescriptor(
                 w_tensor,
                 w_tensor.shape,
                 w_tensor.stride(),
-                [1, block_n // 2, PACKED_BLOCK_K_W // 64, 128]
+                [1, block_n // 2, PACKED_BLOCK_K_W // 64, 2, 64]
             )
         return TensorDescriptorBuilder.create_basic_descriptor(w_tensor, block_shape=[1, PACKED_BLOCK_K_W, block_n],
                                                                transpose=transpose)
