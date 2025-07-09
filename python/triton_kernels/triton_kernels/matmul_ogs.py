@@ -117,6 +117,8 @@ class TensorDescriptorBuilder:
         W_PACK_DIVISOR = 2 if w_tensor.dtype == torch.uint8 else 1
         PACKED_BLOCK_K_W = block_k // W_PACK_DIVISOR
         if W_PACK_DIVISOR == 2 and PACKED_BLOCK_K_W < 128:
+            # FIXME: temporary reshape and permute to load 128-byte cache lines in the kernel.
+            # Weights should be preprocessed instead.
             assert transpose is True
             w_tensor = w_tensor.permute(0, 2, 1)
 
@@ -127,7 +129,7 @@ class TensorDescriptorBuilder:
             s0, s1, s2 = w_tensor.shape
             w_tensor = w_tensor.reshape(s0, triton.cdiv(s1, 2), 2, triton.cdiv(s2, 64), 64)
             w_tensor = w_tensor.permute(0, 1, 3, 2, 4)
-            w_tensor = w_tensor.reshape(s0, triton.cdiv(s1, 2), triton.cdiv(s2, 64), 2, 64)
+            w_tensor = w_tensor.contiguous()
             return TensorDescriptor(
                 w_tensor,
                 w_tensor.shape,
