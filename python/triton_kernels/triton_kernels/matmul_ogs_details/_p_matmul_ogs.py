@@ -6,6 +6,7 @@ import triton.language as tl
 from triton.tools.ragged_tma import load_ragged, store_ragged
 from triton_kernels import target_info
 from triton_kernels.tensor_details.layout_details.blackwell_scale import unswizzle_mx_scale_bw
+from triton_kernels.tensor_details.layout_details.blackwell_value import unswizzle_mx_value_bw
 from triton_kernels.numerics_details.flexpoint import (
     float_to_flex,
     load_scale,
@@ -113,7 +114,7 @@ def _p_matmul_ogs(
              # optimization config
              BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
              GROUP_M: tl.constexpr, XCD_SWIZZLE: tl.constexpr,
-             # NYI: Must be None
+             # One of ["BLACKWELL", None]
              SWIZZLE_MX_VALUE: tl.constexpr,
              # One of ["BLACKWELL", None]
              SWIZZLE_MX_SCALE: tl.constexpr,
@@ -127,7 +128,6 @@ def _p_matmul_ogs(
              UPCAST_INDICES:tl.constexpr=False,
              SWAP_XW: tl.constexpr = False,
              IS_EPILOGUE_QUANT_MXFP8: tl.constexpr = False):
-    # tl.static_assert(SWIZZLE_MX_VALUE is None, "NYI. Value swizzling")
 
     # why is this faster than using host-side tensor descriptor?!
     if Y_TMA_MODE is not None:
@@ -310,10 +310,12 @@ def _p_matmul_ogs(
                     x = tl.load(XPtrs, mask=mask_k[None, :], other=0.0)
 
             # --- load w ---
-            if W_TRANSPOSE:
-                w = tl.reshape(W.load([expt_id, off_n, off_k_w]), W.block_shape[1:]).T
+            if SWIZZLE_MX_VALUE == "BLACKWELL_VALUE":
+                w = unswizzle_mx_value_bw(tl.reshape(W.load([expt_id, off_n // 2, off_k_w // 64, 0, 0]), W.block_shape[1:]))
             else:
-                w = tl.reshape(W.load([expt_id, off_k_w, off_n]), W.block_shape[1:])
+                w = tl.reshape(W.load([expt_id, off_n, off_k_w]), W.block_shape[1:])
+            if W_TRANSPOSE:
+                w = w.T
 
             # --- load w_scale ---
             if is_w_microscaled:
