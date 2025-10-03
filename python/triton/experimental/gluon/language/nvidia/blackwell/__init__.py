@@ -383,6 +383,31 @@ def tcgen05_mma(a, b, acc, *, use_acc=True, pred=True, mbarriers=None, mbarrier_
 
 
 @builtin
+def tcgen05_scaled_mma(a, a_scale, a_type, b, b_scale, b_type, acc, *, use_acc=True, pred=True, mbarriers=None, mbarrier_preds=None, _semantic=None):
+    use_acc = _semantic.to_tensor(use_acc)
+    pred = _semantic.to_tensor(pred)
+
+    if mbarriers is None:
+        assert mbarrier_preds is None
+        mbarriers = []
+        mbarrier_preds = []
+    else:
+        mbarriers = [bar.handle for bar in mbarriers]
+        if mbarrier_preds is None:
+            true = _semantic.to_tensor(True)
+            mbarrier_preds = [true.handle] * len(mbarriers)
+        else:
+            mbarrier_preds = _semantic._convert_to_ir_values(mbarrier_preds, require_i64=False)
+
+    a_type = _semantic._str_to_fp_type(_unwrap_if_constexpr(a_type))
+    b_type = _semantic._str_to_fp_type(_unwrap_if_constexpr(b_type))
+
+    _semantic.builder.create_tcgen05_scaled_mma(
+        a.handle, a_scale.handle, a_type, b.handle, b_scale.handle, b_type, acc.handle, use_acc.handle, pred.handle, mbarriers,
+        mbarrier_preds)
+
+
+@builtin
 def tcgen05_commit(barrier, _semantic=None):
     """
     This instruction causes the provided mbarrier to be arrived-on with a count
